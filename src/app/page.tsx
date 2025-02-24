@@ -1,101 +1,256 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { Bot, Loader2, MessageSquare, Send, User2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import Markdown from "react-markdown";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+type Message = {
+  role: "user" | "assistant" | "tool" | "system";
+  content: string;
+};
+
+type MessageWithThinking = Message & {
+  finishedThinking?: boolean;
+  think?: string;
+};
+
+function useMessagesWithThinking(messages: Message[]) {
+  return useMemo(
+    () =>
+      messages.map((m: Message): MessageWithThinking => {
+        if (m.role === "assistant") {
+          if (m.content.includes("</think>")) {
+            return {
+              ...m,
+              finishedThinking: true,
+              think: m.content
+                .split("</think>")[0]
+                .replace("</think>", "")
+                .replace("<think>", ""),
+              content: m.content.split("</think>")[1],
+            };
+          } else {
+            return {
+              ...m,
+              finishedThinking: false,
+              think: m.content.replace("<think>", ""),
+              content: "",
+            };
+          }
+        }
+        return m;
+      }),
+    [messages]
+  );
+}
+
+function streamAsyncIterator(reader: ReadableStreamDefaultReader<Uint8Array>) {
+  const decoder = new TextDecoder("utf-8");
+  return {
+    async *[Symbol.asyncIterator]() {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) return;
+          yield decoder.decode(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    },
+  };
+}
+
+export default function AIChat() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [premise, setPremise] = useState(
+    "You are a software developer with a focus on React/TypeScript.\rKeep your answer simple and straight forward."
+  );
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setInput("");
+    setLoading(true);
+
+    const messagesWithInput: Message[] = [
+      ...messages,
+      { role: "system", content: premise },
+      { role: "user", content: input },
+    ];
+    setMessages(messagesWithInput);
+
+    const stream = await fetch("/api/ai", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [...messagesWithInput],
+      }),
+    });
+
+    if (stream.body) {
+      let assistantResponse = "";
+      const reader = stream.body.getReader();
+      for await (const value of streamAsyncIterator(reader)) {
+        const arr = value.split("\n").filter((line) => line.trim() !== "");
+        for (const line of arr) {
+          let content = "";
+          try {
+            const data = JSON.parse(line);
+            content = data.message.content;
+          } catch (error) {
+            console.log(arr);
+            console.log(error);
+            continue;
+          }
+          assistantResponse += content;
+          setMessages([
+            ...messagesWithInput,
+            {
+              role: "assistant",
+              content: assistantResponse,
+            },
+          ]);
+        }
+      }
+    }
+    setLoading(false);
+  };
+
+  const messagesWithThinkingSplit = useMessagesWithThinking(messages);
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div className="flex flex-col min-h-screen bg-gray-900">
+      <div className="p-4 container mx-auto max-w-4xl space-y-4">
+        <label htmlFor={"premise"}>
+          Premise: (set premise for the AI)
+          <textarea
+            name={"premise"}
+            style={{ color: "black", padding: "5px 10px", width: "100%" }}
+            value={premise}
+            onChange={(e) => setPremise(e.target.value)}
+          />
+        </label>
+      </div>
+      <div className="flex-1 p-4 container mx-auto max-w-4xl space-y-4 pb-32">
+        {messagesWithThinkingSplit
+          .filter(({ role }) => role === "user" || role === "assistant")
+          .map((m, index) => (
+            <AIMessage key={index} message={m} />
+          ))}
+      </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gray-800 border-t border-gray-700">
+        <form onSubmit={handleSubmit} className="container mx-auto max-w-4xl">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <MessageSquare className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                className="flex-1 bg-gray-900 border-gray-700 text-gray-100 pl-10"
+                value={input}
+                disabled={loading}
+                placeholder="Ask your local DeepSeek..."
+                onChange={(e) => setInput(e.target.value)}
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              <span className="sr-only">Send message</span>
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
+
+const AIMessage: React.FC<{ message: MessageWithThinking }> = ({ message }) => {
+  const [collapsed, setCollapsed] = useState(true);
+
+  return (
+    <div
+      className={`flex ${
+        message.role === "user" ? "justify-end" : "justify-start"
+      }`}
+    >
+      <div
+        className={`max-w-[80%] rounded-lg p-4 ${
+          message.role === "user"
+            ? "bg-primary text-black"
+            : "bg-gray-800 text-gray-100"
+        }`}
+      >
+        <div
+          className="flex items-center gap-2 mb-2"
+          style={{ justifyContent: "space-between" }}
+        >
+          <span
+            className="text-sm font-medium"
+            style={{ display: "flex", gap: 10 }}
+          >
+            {message.role === "user" ? (
+              <User2 className="h-4 w-4" />
+            ) : !message.finishedThinking ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Bot className="h-4 w-4" />
+            )}
+
+            <span>{message.role === "user" ? "You" : "DeepSeek R1 (32b)"}</span>
+          </span>
+          <span>
+            {message.role === "assistant" && (
+              <span
+                style={{
+                  cursor: "pointer",
+                  fontStyle: "italic",
+                  fontSize: "12px",
+                }}
+                onClick={() => setCollapsed((c) => !c)}
+              >
+                {collapsed ? "show thoughts" : "hide thoughts"}
+              </span>
+            )}
+          </span>
+        </div>
+
+        {message.role === "assistant" && !message.finishedThinking && (
+          <div className="flex items-center gap-2 text-gray-400">
+            <span className="text-sm">Thinking...</span>
+          </div>
+        )}
+
+        {message.think && (
+          <div
+            style={{ display: collapsed ? "none" : "block" }}
+            className="mb-2 text-sm italic border-l-2 border-gray-600 pl-2 py-1 text-gray-300"
+          >
+            <Markdown>{message.think}</Markdown>
+          </div>
+        )}
+        <article
+          className={`prose max-w-none ${
+            message.role === "user"
+              ? "prose-invert prose-p:text-black prose-headings:text-black prose-strong:text-black prose-li:text-black"
+              : "prose-invert prose-p:text-gray-100 prose-headings:text-gray-100 prose-strong:text-gray-100 prose-li:text-gray-100"
+          }`}
+        >
+          <Markdown>{message.content}</Markdown>
+        </article>
+      </div>
+    </div>
+  );
+};
