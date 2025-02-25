@@ -100,7 +100,7 @@ export default function AIChat() {
         if (value.includes("f:")) {
           continue;
         }
-        assistantResponse += JSON.parse(value.replace("0:", ""));
+        assistantResponse += value.replace("0:", "").replace(/^"|"$/g, "");
         setMessages([
           ...messagesWithInput,
           {
