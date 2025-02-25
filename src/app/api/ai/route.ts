@@ -23,7 +23,7 @@ async function chat(req: Request) {
       messages: [...messages],
     });
 
-    return result.toDataStreamResponse();
+    return result.toTextStreamResponse();
   } catch (error) {
     console.error(error);
     return Response.json(

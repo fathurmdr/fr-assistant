@@ -66,9 +66,7 @@ function streamAsyncIterator(reader: ReadableStreamDefaultReader<Uint8Array>) {
 export default function AIChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [premise, setPremise] = useState(
-    "You are a software developer with a focus on React/TypeScript.\rKeep your answer simple and straight forward."
-  );
+  const [premise, setPremise] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -97,10 +95,7 @@ export default function AIChat() {
       let assistantResponse = "";
       const reader = stream.body.getReader();
       for await (const value of streamAsyncIterator(reader)) {
-        if (value.includes("f:")) {
-          continue;
-        }
-        assistantResponse += value.replace("0:", "").replace(/^"|"$/g, "");
+        assistantResponse += value;
         setMessages([
           ...messagesWithInput,
           {
@@ -119,7 +114,7 @@ export default function AIChat() {
     <div className="flex flex-col min-h-screen bg-gray-900">
       <div className="p-4 container mx-auto max-w-4xl space-y-4">
         <label htmlFor={"premise"}>
-          Premise: (set premise for the AI)
+          {"Premise: (Define the AI's initial context)"}
           <textarea
             name={"premise"}
             style={{ color: "black", padding: "5px 10px", width: "100%" }}
