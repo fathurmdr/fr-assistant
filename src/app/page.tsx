@@ -104,7 +104,8 @@ export default function AIChat() {
             const data = JSON.parse(line);
             content = data.message.content;
           } catch (error) {
-            console.log(arr);
+            console.log("index :>> ", arr.indexOf(line));
+            console.log("value :>> ", line);
             console.log(error);
             continue;
           }
