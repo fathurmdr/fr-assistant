@@ -1,3 +1,6 @@
+import { streamText } from "ai";
+import { createOllama } from "ollama-ai-provider";
+
 async function chat(req: Request) {
   const { messages } = await req.json();
 
@@ -13,28 +16,14 @@ async function chat(req: Request) {
   }
 
   try {
-    const aiResponse = await fetch(process.env.AI_URL ?? "", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: process.env.AI_MODEL ?? "deepseek-r1:1.5b",
-        streaming: true,
-        options: {
-          temperature: 0.1,
-          repeat_penalty: 1.2,
-          numa: true, // testing for ARM
-        },
-        messages: [...messages],
-      }),
-    });
-    if (!aiResponse.body) {
-      console.error(aiResponse.body);
-      throw new Error("ai response not ok");
-    }
+    const ollama = createOllama({ baseURL: process.env.AI_BASE_URL + "/api" });
 
-    return aiResponse;
+    const result = streamText({
+      model: ollama(process.env.AI_MODEL ?? "deepseek-r1:1.5b"),
+      messages: [...messages],
+    });
+
+    return result.toDataStreamResponse();
   } catch (error) {
     console.error(error);
     return Response.json(

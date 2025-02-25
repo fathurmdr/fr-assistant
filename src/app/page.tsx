@@ -97,27 +97,17 @@ export default function AIChat() {
       let assistantResponse = "";
       const reader = stream.body.getReader();
       for await (const value of streamAsyncIterator(reader)) {
-        const arr = value.split("\n").filter((line) => line.trim() !== "");
-        for (const line of arr) {
-          let content = "";
-          try {
-            const data = JSON.parse(line);
-            content = data.message.content;
-          } catch (error) {
-            console.log("index :>> ", arr.indexOf(line));
-            console.log("value :>> ", line);
-            console.log(error);
-            continue;
-          }
-          assistantResponse += content;
-          setMessages([
-            ...messagesWithInput,
-            {
-              role: "assistant",
-              content: assistantResponse,
-            },
-          ]);
+        if (value.includes("f:")) {
+          continue;
         }
+        assistantResponse += JSON.parse(value.replace("0:", ""));
+        setMessages([
+          ...messagesWithInput,
+          {
+            role: "assistant",
+            content: assistantResponse,
+          },
+        ]);
       }
     }
     setLoading(false);
@@ -210,7 +200,9 @@ const AIMessage: React.FC<{ message: MessageWithThinking }> = ({ message }) => {
               <Bot className="h-4 w-4" />
             )}
 
-            <span>{message.role === "user" ? "You" : "DeepSeek R1 (32b)"}</span>
+            <span>
+              {message.role === "user" ? "You" : "DeepSeek AI with Ollama"}
+            </span>
           </span>
           <span>
             {message.role === "assistant" && (
